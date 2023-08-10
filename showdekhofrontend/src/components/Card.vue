@@ -17,5 +17,4 @@
 <script setup>
 import { RouterLink, RouterView } from 'vue-router'
 let movi=defineProps(['movie'])
-console.log(movi)
 </script>

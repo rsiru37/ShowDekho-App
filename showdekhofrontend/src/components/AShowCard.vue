@@ -6,13 +6,13 @@
             </div>
             <div class="card-body">
                 <h5 class="card-title">AVAILABLE SEATS: {{ show.show.available_seats }}</h5>
-                <h5 class="card-title">Ticket price: {{ show.show.price }}</h5>
+                <h5 class="card-title">Ticket price: ₹ {{ show.show.price }}</h5>
                 <p class="card-text">DATE: {{ show.show.date }}/{{ show.show.month }}/{{ show.show.year }}</p>
                 <p class="card-text">TIME: {{ show.show.hour }}:{{ show.show.minute }}(24-Hr Format)</p>
                 <h4 class="card-title"> THEATRE: {{ show.show.theatre }}</h4>
                 <div class="button-container" style="display: flex; gap: 20px;">
                 <RouterLink :to="{name: 'EditShow', params:{id: show.show.id } }" class="btn btn-primary" >EDIT</RouterLink>
-                <button class="btn btn-primary" @click="confirmdelete()">DELETE</button>
+                <button class="btn btn-danger" @click="confirmdelete()">DELETE</button>
             </div>
             </div>
         </div>

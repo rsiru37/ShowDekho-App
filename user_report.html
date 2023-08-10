@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Monthly Report</title>
+</head>
+<body>
+    <div class="container">
+        <h1>SHOWDEKHO!</h1>
+        <br>
+        <h1>This Report is for : {{name}}</h1>
+        <br><br>
+        <h2>The Following data is for the month : {{month}}</h2>
+        <br><br>
+        {% if final_booking_data|length==0 %}
+            <h2>You Havent made any Bookings!</h2>
+        {% else %}
+        <h1>YOUR BOOKINGS:</h1>
+        <table border=1>
+            <tr>
+            <th>BOOKING ID</th>
+            <th>MOVIE NAME</th>
+            <th>SHOW DATE</th>
+            <th>SHOW TIME</th>
+            <th>THEATRE</th>
+            <th>SEATS BOOKED</th>
+            <th>BOOKING DATE</th>
+            <th>BOOKING TIME</th>
+            <th>TOTAL COST(INR)</th>
+        </tr>
+        {% for i in final_booking_data %}
+        <tr>
+            <td>{{i['id']}}</td>
+            <td>{{i['movie']}}</td>
+            <td>{{i['show_date']}}</td>
+            <td>{{i['show_time']}}</td>
+            <td>{{i['theatre']}}</td>
+            <td>{{i['seats']}}</td>
+            <td>{{i['booking_date']}}</td>
+            <td>{{i['booking_time']}}</td>
+            <td>{{i['total_cost']}}</td>
+        </tr>
+        {% endfor %}
+        </table>
+        <br>
+        <h3>Total Amout Spent = Rs. {{total_cost}}</h3>
+        {% endif %}
+    </div>
+
+</body>
+</html>

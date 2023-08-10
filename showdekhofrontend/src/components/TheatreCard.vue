@@ -11,7 +11,8 @@
                 <h5 class="card-text">PINCODE: {{ th.th.pincode }}</h5>
                 <div class="button-container" style="display: flex; gap: 20px;">
                 <RouterLink :to="{name: 'Editheatre', params: { id: th.th.tid } }" class="btn btn-primary" @click="adder">EDIT</RouterLink>
-                <button class="btn btn-primary" @click="confirmdelete">DELETE</button>
+                <button class="btn btn-danger" @click="confirmdelete">DELETE</button>
+                <button type="button" class="btn btn-outline-success" style="margin-left: auto;" @click="exprt()">Export CSV</button>
             </div>
             </div>
         </div>
@@ -30,16 +31,19 @@ function confirmdelete(){
     const dd={
         theatre_id:th.th.tid
     }
-    console.log(dd);
     if(confirm(`Are you sure you want to delete "${th.th.tname}"`)){
         const res= axios.delete('http://127.0.0.1:5000/theatre',{
                     headers:{'Content-Type': 'application/json', 'Authorization' : `Bearer ${localStorage.getItem('admin-access-token')}`},
                     data: JSON.stringify(dd)
                     })
-        console.log("resPONSE_> ", res);
         setTimeout(() => {
             window.location.reload();
                  }, 1500);
     }
+}
+async function exprt(){
+    const res=await axios.get(`http://127.0.0.1:5000/report/${th.th.tid}`, {headers:{'Content-Type': 'application/json', 'Authorization' : `Bearer ${localStorage.getItem('admin-access-token')}`}})
+    window.location.href=`http://127.0.0.1:5000/download-file/${res.data}`;
+
 }
 </script>

@@ -1,8 +1,10 @@
 <template>
+    <h3 class="header" style="color: crimson; margin: auto; text-align: center;">ADMIN PORTAL</h3>
     <div class="sidebar" style="width: 250px;height: 100vh;padding: 20px;border-width: 250px; float: left;">
         <h2>Welcome {{ name }}</h2>
-    </div>
-    <div class="container" style="margin-top: 5%; float: left;">
+    </div><br>
+    <AdminNavbar></AdminNavbar>
+    <div class="container" style="margin-top: 3%; float: left;">
         <h1>Create New Theatre</h1>
         <form>
              <input v-model="theatre.tname" type="text" placeholder="Theatre Name"><br><br>
@@ -28,19 +30,23 @@
 import { ref } from 'vue'
 import axios from 'axios';
 import { useRouter } from 'vue-router';
+import AdminNavbar from '../components/AdminNavbar.vue';
 const router=useRouter()
-const name=localStorage.getItem('admin_name')
+const name=localStorage.getItem('admin_name');
+const msg=ref('');
     let theatre=ref({});
-    function submit(){
+    async function submit(){
         try {
-              const res= axios.post('http://127.0.0.1:5000/theatre',theatre,
+              const res= await axios.post('http://127.0.0.1:5000/theatre',theatre.value,
               {
                 headers:{'Authorization' : `Bearer ${localStorage.getItem('admin-access-token')}` },
                 });
-              //this.msg="Theatre Creation Successful!"
-              console.log(res.data);
-              setTimeout(() => {
+                msg.value=res.data
+              if(res.data=='Theatre Added Successfully!'){
+                setTimeout(() => {
                 router.push('/theatres') }, 1500);
+              }
+
                 }           
             catch (error) {
               console.log(error,"ErrOR")

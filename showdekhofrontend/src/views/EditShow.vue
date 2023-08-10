@@ -1,8 +1,10 @@
 <template>
+  <h3 class="header" style="color: crimson; margin: auto; text-align: center;">ADMIN PORTAL</h3>
     <div class="sidebar" style="width: 250px;height: 100vh;padding: 20px;border-width: 250px; float: left;">
         <h2>Welcome {{ name }}</h2>
-    </div>
-    <div class="container" style="margin-top: 5%; float: left;">
+    </div><br>
+    <AdminNavbar></AdminNavbar>
+    <div class="container" style="margin-top: 3%; float: left;">
         <h1>Editing Show</h1>
         <div v-if="show.available_seats == show.total_seats">
           <div class="form-group">
@@ -25,7 +27,7 @@
      <button type="button" class="btn btn-primary btn-lg" v-on:click="submit()">SUBMIT</button>
         </div>
         <div v-else>
-            <p>Sorry we cannot Edit</p>
+            <p>Sorry we cannot Edit this Show, As Customers have already started Booking Tickets for this Show</p>
         </div>
         <br>
         <br>
@@ -34,6 +36,7 @@
 </template>
 
 <script setup>
+import AdminNavbar from '../components/AdminNavbar.vue';
 import { useRoute } from 'vue-router';
 import { useRouter } from 'vue-router';
 const router=useRouter();
@@ -50,7 +53,6 @@ const theatres=ref();
   try {
     const response = await axios.get(`http://127.0.0.1:5000/show/${id}`, {headers:{'Content-Type': 'application/json', 'Authorization' : `Bearer ${localStorage.getItem('admin-access-token')}`}});
     show.value=response.data;
-    console.log(response.data);
     const response1 = await axios.get('http://127.0.0.1:5000/home',{headers:{'Content-Type': 'application/json', 'Authorization' : `Bearer ${localStorage.getItem('admin-access-token')}`}});
     movies.value=response1.data;
     const response2=await axios.get('http://127.0.0.1:5000/theatre',{headers:{'Content-Type': 'application/json', 'Authorization' : `Bearer ${localStorage.getItem('admin-access-token')}`}});
@@ -69,8 +71,6 @@ function submit(){
     const c=show.value.date_time;
     const d=show.value.ticket_price;
     const e=id;
-    console.log(show)
-    console.log('Log37',a,b,c,d,e)
     try {
               const res= axios.put('http://127.0.0.1:5000/shows',{a,b,c,d,e},
               {

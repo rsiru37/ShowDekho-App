@@ -1,4 +1,4 @@
-from flask import Flask,render_template,request,redirect,jsonify
+from flask import Flask,render_template,request,redirect,jsonify,send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import create_access_token, get_jwt_identity,jwt_required,JWTManager
 from flask_restful import Resource, Api,fields,marshal_with,reqparse,abort
@@ -17,16 +17,20 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
+from flask_caching import Cache
 
 app=Flask(__name__)
 CORS(app)
 app.config['SQLALCHEMY_DATABASE_URI']='sqlite:///database.sqlite3'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS']=False
 app.config['JWT_SECRET_KEY']="yopies"
+app.config['CACHE_TYPE'] = 'redis'
+app.config['CACHE_REDIS_URL'] = 'redis://localhost:6379/0'
 cors=CORS(app)
 jwt=JWTManager(app)
 db=SQLAlchemy(app)
 api=Api(app)
+cache = Cache(app)
 SMPTP_SERVER_HOST="DESKTOP-JHN6I7U"
 SMPTP_SERVER_PORT=1025
 SENDER_ADDRESS="email@shodekho.com"
@@ -86,7 +90,8 @@ class Booking(db.Model):
 ######### CELERY ##########
 app.config.update(
     CELERY_BROKER_URL='redis://localhost:6379/0',
-    CELERY_RESULT_BACKEND='redis://localhost:6379/1'
+    result_backend='redis://localhost:6379/1'
+    #CELERY_RESULT_BACKEND='redis://localhost:6379/1'
 )
 celery = make_celery(app)
 
@@ -154,7 +159,6 @@ def gencsv(id):
     movi.add(show.movie.mid)
   movi=list(movi)
   movies=[Movie.query.filter_by(mid=x).first() for x in movi]
-  print(movies)
   data_rows = [['This', "Report", "is", "For" ,theatre.tname, theatre.city, 'Capacity','Of', theatre.capacity],[]]
   data_rows.append(['List','Of','Movies', 'Hosted', ':']+[movie.mname for movie in movies])
   data_rows.append([])
@@ -162,10 +166,10 @@ def gencsv(id):
   for movie in movies:
     for show in movie.shows:
       data_rows.append([movie.mname, show.stime, sum(book.seats for book in show.bookings), sum(book.seats for book in show.bookings)*show.ticket_price])
-  with open('admin_report.csv', mode='w', newline='') as file:
+  with open(f'admin_report_{theatre.tid}.csv', mode='w', newline='') as file:
     writer=csv.writer(file)
     writer.writerows(data_rows)
-  return movies
+  return f'admin_report_{theatre.tid}.csv'
 
 @celery.task()
 def send_email(to,subject,mesg):
@@ -198,19 +202,18 @@ def send_daily_mail():
 @celery.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
     sender.add_periodic_task(crontab(hour=17,minute=37),send_daily_mail.s(), name="Daily Reminder Task")
-
-@celery.on_after_configure.connect
-def setup_periodic_tasks(sender, **kwargs):
-    sender.add_periodic_task(crontab(hour=1,minute=33),create_pdf.s(), name="Monthly Maintenence Report")
+    sender.add_periodic_task(crontab(0, 0, day_of_month='1'),create_pdf.s(), name="Monthly Maintenence Report")
 
 
+
+@app.route('/download-file/<string:path>')
+def download_file(path):
+  return send_file(path)
 ############################################################################################################################################################################
 
 class Piture(Resource):
-  #@jwt_required()
+  @cache.cached(timeout=10, key_prefix='movies')
   def get(self):
-    # current_user_id = get_jwt_identity()
-    #print(current_user_id)
     t={}
     limo=[]
     x=Movie.query.all()
@@ -223,20 +226,17 @@ class Piture(Resource):
       t['ratings']=m.ratings
       limo.append(t)
       t={}
-      print(limo)
     return jsonify(limo) 
   
 
 class Logo(Resource):
   def post(self): # Login
-    print(request.get_json())
     email=request.get_json()['email']
     pwd=request.get_json()['pwd']
     admin=request.get_json()['admin']
     a=User.query.filter_by(email=email, pwd=pwd).first()
-    print(admin,a,a.admin)
     if(a):
-      access_token = create_access_token(identity=a.id)
+      access_token = create_access_token(identity=a.id, expires_delta=datetime.timedelta(hours=1))
       a.last_loggedin=datetime.datetime.now()
       db.session.commit()
       if(a.admin and admin):
@@ -244,10 +244,9 @@ class Logo(Resource):
         return jsonify(d)
       else:
         d={'at':access_token, 'msg':"Login Successful", 'user':a.name}
-        print(d)
         return jsonify(d)
     else:
-      return jsonify('Login Failed! Invalid Credentials')
+      return jsonify('Login Failed')
     
 class UserAuth(Resource):
   @jwt_required()
@@ -257,59 +256,59 @@ class UserAuth(Resource):
     return jsonify(user.name)
   ############################################## MOVIES #######################################################
 class Movid(Resource):
-  @jwt_required()
   def get(self):
-    print(Movie.query.get(request.args.get('id')).mname)
-    return jsonify(Movie.query.get(request.args.get('id')).mname)    
+    movie=Movie.query.filter_by(mid=request.args.get('movie_id')).first()
+    return jsonify(
+      {'director':movie.director, 'duration':movie.duration,'ratings':movie.ratings,'summary':movie.summary})    
+
+  @jwt_required()
   def post(self):
-    print(request.get_json())
     movie_name=request.get_json()['movie_name']
     movie_director=request.get_json()['movie_director']
     movie_duration=request.get_json()['movie_duration']
     movie_ratings=request.get_json()['movie_ratings']
     movie_summary=request.get_json()['movie_summary']
     admin=request.get_json()['admin_name']
+    movie=Movie.query.filter_by(mname=movie_name).first() # We are checking if any movie exists with the Same Name?
     try:
       admin=User.query.filter_by(name=admin).first()
-      if(admin.admin):
+      if(admin.admin and not(movie)):
         m=Movie(mname=movie_name,director=movie_director,duration=movie_duration,summary=movie_summary,ratings=movie_ratings)
         admin.movies.append(m)
         db.session.commit()
         return jsonify("Movie Creation Successful!")
       else:
-        raise Exception
+        return jsonify("Movie with Same name already exists, Try with a Different Name")
     except Exception as e:
       return jsonify(str(e))
   
+  @jwt_required()
   def put(self):
-    print(request.get_json())
     movie_name=request.get_json()['movie_name']
     movie_director=request.get_json()['movie_director']
     movie_duration=request.get_json()['movie_duration']
     movie_ratings=request.get_json()['movie_ratings']
     movie_summary=request.get_json()['movie_summary']
-    admin=request.get_json()['admin_name']
     mid=request.get_json()['movie_id']
+    movie=Movie.query.filter_by(mname=movie_name).first() # We are checking if any movie exists with the Same Name?
+    if(movie):
+      return "Movie with Same name already exists, Try with a Different Name"
     try:
-      print("hello")
       movie=Movie.query.filter_by(mid=mid).first()
-      print(movie)
       movie.mname=movie_name
       movie.director=movie_director
       movie.duration=movie_duration
       movie.ratings=movie_ratings
       movie.summary=movie_summary
       db.session.commit()
-      print('Raj', movie,movie.mname,movie.mid)
       return jsonify('Update Successfull')
     except Exception as e:
       return jsonify(str(e))
     
+  @jwt_required()
   def delete(self):
     movie_id=request.get_json()['movie_id']
-    print('hello37', movie_id)
     try:
-      print("hello", movie_id)
       movie=Movie.query.filter_by(mid=movie_id).first()
       db.session.delete(movie)
       db.session.commit()
@@ -321,7 +320,8 @@ class Movid(Resource):
 ########################################################THEATRES#########################################################
 
 class Theatres(Resource):
-  #@jwt_required()
+  @cache.cached(timeout=10, key_prefix='theatres')
+  @jwt_required()
   def get(self):
     theatre_dict={}
     theatre_list=[]
@@ -334,18 +334,32 @@ class Theatres(Resource):
       theatre_dict['contact']=theatre.contact
       theatre_list.append(theatre_dict)
       theatre_dict={}
-    print(theatre_list)
     return jsonify(theatre_list)
   
   @jwt_required()
   def post(self):
-    print('Landed', request.get_json())
     params=request.get_json()
     aid=get_jwt_identity()
+    if(Theatre.query.filter_by(tname=params['tname']).first()):
+      return 'Theatre with the Same name already exists, Try with a Different Name'
     theatre=Theatre(tname=params['tname'], city=params['city'], pincode=params['pincode'], capacity=params['capacity'], contact=params['contact'], tadmin=aid)
     db.session.add(theatre)
     db.session.commit()
     return 'Theatre Added Successfully!'
+  
+  @jwt_required()
+  def put(self):
+    params=request.get_json()['data']
+    if(Theatre.query.filter_by(tname=params['theatre_name']).first()):
+      return jsonify('Theatre with Same name already Exists, Try with a Different Name')
+    theatre=Theatre.query.filter_by(tid=params['theatre_id']).first()
+    theatre.tname=params["theatre_name"]
+    theatre.city=params['theatre_city']
+    theatre.pincode=params['theatre_pincode']
+    theatre.contact=params['theatre_contact']
+    theatre.capacity=params['theatre_capacity']
+    db.session().commit()
+    return jsonify('Update Successfull!!')
 
   @jwt_required()
   def delete(self):
@@ -355,6 +369,7 @@ class Theatres(Resource):
     return 'Deleted Successfully!'
 
 class ShowTheatre(Resource):
+  @jwt_required()
   def get(self,id):
     sd={}
     show=Show.query.filter_by(sid=id).first()
@@ -368,14 +383,12 @@ class ShowTheatre(Resource):
 
 
 class Shows(Resource):
-  # @jwt_required()
+  @jwt_required()
   def get(self,id):
-    print("Nowwwwwwwwwwwwwwwwwwwww!!!")
     movie=Movie.query.filter_by(mid=id).first()
     shows=movie.shows
     show_dict={}
     shows_list=[]
-    print("Shows", shows)
     for show in shows:
       show_dict['price']=show.ticket_price
       show_dict['month']=show.stime.month
@@ -397,12 +410,12 @@ class Shows(Resource):
 
 
 class Showsapi(Resource):
-  #@jwt_required()
+  #@cache.cached(timeout=120, key_prefix='shows')
+  @jwt_required()
   def get(self):
     sd={}
     sl=[]
     shows=Show.query.all()
-    print(shows)
     for s in shows:
       sd['id']=s.sid
       sd['price']=s.ticket_price
@@ -418,9 +431,9 @@ class Showsapi(Resource):
       sd['available_seats']=s.available_seats
       sl.append(sd)
       sd={}
-    print(sl)
     return jsonify(sl)
   
+  @jwt_required()
   def post(self):
     params=request.get_json()
     mid=params['a']
@@ -432,14 +445,14 @@ class Showsapi(Resource):
     day=int(dt[2][0:2])
     hour=int(dt[2][3:5])
     minute=int(dt[2][6:])
-    show=Show(ticket_price=ticket_price,stime=datetime.datetime(year,month,day,hour,minute),moid=mid,thid=tid,available_seats=Theatre.query.filter_by(tid=tid).first().capacity, sadmin=1)
+    show=Show(ticket_price=ticket_price,stime=datetime.datetime(year,month,day,hour,minute),moid=mid,thid=tid,available_seats=Theatre.query.filter_by(tid=tid).first().capacity, sadmin=get_jwt_identity())
     db.session.add(show)
     db.session.commit()
     return 'Show Added Successfully!'
 
+  @jwt_required()
   def put(self):
     params=request.get_json()
-    print(params)
     mid=params['a']
     tid=params['b']
     dt=params['c'].split('-')
@@ -458,6 +471,7 @@ class Showsapi(Resource):
     db.session.commit()
     return 'Updated Sucessfully!'
 
+  @jwt_required()
   def delete(self):
     db.session.delete(Show.query.filter_by(sid=request.get_json()['show_id']).first())
     db.session.commit()
@@ -467,20 +481,7 @@ class Showsapi(Resource):
 class Thid(Resource):
   def get(self,id):
     theatre=Theatre.query.filter_by(tid=id).first()
-    return jsonify({'tname':theatre.tname, 'city':theatre.city, 'pincode':theatre.pincode, 'capacity':theatre.capacity, 'contact':theatre.contact})
-  
-  def put(self,id):
-    theatre=Theatre.query.filter_by(tid=id).first()
-    #print(request.get_json()['data'], type(request.get_json()['data']))
-    params=request.get_json()['data']
-    print(params, type(params))
-    theatre.tname=params["theatre_name"]
-    theatre.city=params['theatre_city']
-    theatre.pincode=params['theatre_pincode']
-    theatre.contact=params['theatre_contact']
-    theatre.capacity=params['theatre_capacity']
-    db.session().commit()
-    return jsonify('Update Successfull!!')
+    return jsonify({'tname':theatre.tname, 'city':theatre.city, 'pincode':theatre.pincode, 'capacity':theatre.capacity, 'contact':theatre.contact, 'tid':theatre.tid})
 
 class Book(Resource):
   @jwt_required()
@@ -495,23 +496,39 @@ class Book(Resource):
     return 'Booking Success!'
 
 class Report(Resource):
-  def get(self):
-    fn=user_test.delay()
-    print('Fn Hit!')
-    return 'Yopies!'
-  
-api.add_resource(Logo,'/logi')
-api.add_resource(Piture,'/home')
-api.add_resource(UserAuth,'/uauth')
-api.add_resource(Movid,'/movie')
-api.add_resource(Shows,'/shows/<int:id>') #User
-api.add_resource(Theatres,'/theatre')
-api.add_resource(Thid,'/theatre/<int:id>')
-api.add_resource(Showsapi,'/shows')
-api.add_resource(ShowTheatre,'/show/<int:id>') # Admin editing a Show
-api.add_resource(Book,'/booking')
-api.add_resource(Report,'/report/<int:id>')
+  @jwt_required()
+  def get(self,id):
+    k=gencsv.delay(id)
+    while(not(k.ready())):
+      print('H', k.ready())
+    return k.result
 
+class Signup(Resource):
+  def post(self):
+    email=request.get_json()['email']
+    pwd=request.get_json()['pwd']
+    name=request.get_json()['name']
+    n_user=User.query.filter_by(name=name).first()
+    e_user=User.query.filter_by(email=email).first()
+    if(n_user or e_user):
+      return 'Username/Email Already exists try with a different name/email'
+    user=User(name=name,email=email,pwd=pwd,admin=0)
+    db.session.add(user)
+    db.session.commit()
+    return 'User Created Successfully!'
+
+api.add_resource(Logo,'/logi') #USER LOGIN
+api.add_resource(Piture,'/home') # DISPLAY OF MOVIES AT HOMEPAGE OF USER/ADMIN(GET ONLY)
+api.add_resource(UserAuth,'/uauth')
+api.add_resource(Movid,'/movie') #ADMIN (CUD) OF MOVIES & Getting Movie Info for a movie id
+api.add_resource(Shows,'/shows/<int:id>') # Getting SHOWS FOR A MOVIE(USER ONLY)
+api.add_resource(Theatres,'/theatre') #THEATRE CRUD
+api.add_resource(Thid,'/theatre/<int:id>')#Getting a THEATRES INFO BY THEATRE_ID
+api.add_resource(Showsapi,'/shows') # Getting All the Shows INFO
+api.add_resource(ShowTheatre,'/show/<int:id>') # Admin editing a Show
+api.add_resource(Book,'/booking') # USER BOOKING TICKETS
+api.add_resource(Report,'/report/<int:id>')
+api.add_resource(Signup,'/usersignup') # USER SIGNUP
 
 if __name__=='__main__':
   app.run(debug=True)

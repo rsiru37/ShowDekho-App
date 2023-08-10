@@ -1,0 +1,77 @@
+// import axios from 'axios'
+
+// document.addEventListener('DOMContentLoaded', function () {
+//     const loginButton = document.getElementById('loginButton');
+//     const signupButton = document.getElementById('signupButton');
+//     const loginForm = document.getElementById('loginForm');
+//     const signupForm = document.getElementById('signupForm');
+
+//     loginButton.addEventListener('click', () => {
+//       loginForm.style.display = 'block';
+//       signupForm.style.display = 'none';
+//     });
+
+//     signupButton.addEventListener('click', () => {
+//       loginForm.style.display = 'none';
+//       signupForm.style.display = 'block';
+//     });
+//   },
+//   export default{
+//     data(){
+//         return{
+//             login_form:{
+//                 email:'',
+//                 pwd:'',
+//                 isChecked:false
+//             },
+//             signup:{
+//               email:'',
+//               name:'',
+//               pwd:''
+//             }
+//         }
+//     },
+//     methods: {
+//         async login(){
+//           console.log(this.login_form.email,this.login_form.pwd,this.login_form.isChecked)
+//           if(this.login_form.isChecked){ // Admin Login
+//             try {
+//               await axios.post('http://127.0.0.1:5000/logi',{
+//                     email: this.login_form.email,
+//                     pwd:this.login_form.pwd,
+//                     admin:this.login_form.isChecked
+//                 }).then(response =>{ 
+//                     localStorage.setItem('admin-access-token', response.data.at)
+//                     localStorage.setItem('admin_name',response.data.admin)
+//                     this.$router.push('/adashboard')
+//                     })
+
+              
+//             } catch (error) {
+//               console.log(error,"ErrOR")
+//             }
+//           }
+//           else{ // User Login
+//             try{
+//                 await axios.post('http://127.0.0.1:5000/logi',{
+//                     email: this.login_form.email,
+//                     pwd:this.login_form.pwd,
+//                     admin:this.login_form.isChecked
+//                 }).then(response =>{ 
+//                     console.log("Res->", response)
+//                     localStorage.setItem('user-access-token', response.data.at)
+//                     localStorage.setItem('user_name',response.data.user)
+//                     this.$router.push('/dashboard')
+//                     console.log(response.data)})
+//             }
+//             catch(error){
+//                 console.log("Login Failed", error)
+//             }
+//           }
+//         }
+//     }
+// }
+  
+  
+//   );
+

@@ -12,7 +12,7 @@
                 <div class="button-container" style="display: flex; gap: 20px;">
                 <RouterLink :to="{name: 'EditMovie', params: { id: movi.movie.id } }" class="btn btn-primary" @click="adder">EDIT</RouterLink>
 
-                <button class="btn btn-primary" @click="confirmdelete">DELETE</button>
+                <button class="btn btn-danger" @click="confirmdelete">DELETE</button>
             </div>
             </div>
         </div>
@@ -35,7 +35,6 @@ function confirmdelete(){
                     headers:{'Content-Type': 'application/json', 'Authorization' : `Bearer ${localStorage.getItem('admin-access-token')}`},
                     data: JSON.stringify(dd)
                     })
-        console.log("resPONSE_> ", res);
         setTimeout(() => {
             window.location.reload();
                  }, 1500);

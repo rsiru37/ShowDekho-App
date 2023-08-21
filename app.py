@@ -66,7 +66,7 @@ class Theatre(db.Model):
   capacity=db.Column(db.Integer,nullable=False)
   contact=db.Column(db.Integer, unique=True)
   tadmin=db.Column(db.Integer(), db.ForeignKey('user.id', ondelete='CASCADE')) # The person who created the Theatre
-  shows=db.relationship('Show', backref='theatre', lazy='select')
+  shows=db.relationship('Show', backref='theatre',cascade='all, delete-orphan', lazy='select')
 
 class Show(db.Model):
   sid=db.Column(db.Integer, primary_key=True,autoincrement=True)
@@ -82,9 +82,14 @@ class Show(db.Model):
 class Booking(db.Model):
   bid=db.Column(db.Integer, primary_key=True,autoincrement=True)
   uid=db.Column(db.Integer,db.ForeignKey('user.id'),nullable=False)
-  shid=db.Column(db.Integer, db.ForeignKey('show.sid'),nullable=False)
+  shid=db.Column(db.Integer, db.ForeignKey('show.sid'))
   seats=db.Column(db.Integer)
   booking_date=db.Column(db.DateTime,nullable=False)
+  movie_name=db.Column(db.String(100))
+  tid=db.Column(db.String(100))
+  theatre_name=db.Column(db.String(100))
+  show_time=db.Column(db.DateTime)
+  ticket_price=db.Column(db.Integer)
 
 
 ######### CELERY ##########
@@ -140,12 +145,12 @@ def gen_html(user):
     booking_data['seats']=book.seats
     booking_data['booking_date']=f'{book.booking_date.day} / {book.booking_date.month} / {book.booking_date.year}'
     booking_data['booking_time']=f'{book.booking_date.hour} : {book.booking_date.minute}'
-    booking_data['show_date']=f'{book.show.stime.day} / {book.show.stime.month} / {book.show.stime.year}'
-    booking_data['show_time']=f'{book.show.stime.hour} : {book.show.stime.minute}'
-    booking_data['total_cost']=book.seats*book.show.ticket_price
+    booking_data['show_date']=f'{book.show_time.day} / {book.show_time.month} / {book.show_time.year}'
+    booking_data['show_time']=f'{book.show_time.hour} : {book.show_time.minute}'
+    booking_data['total_cost']=book.seats*book.ticket_price
     total_cost+=booking_data['total_cost']
-    booking_data['movie']=book.show.movie.mname
-    booking_data['theatre']=book.show.theatre.tname
+    booking_data['movie']=book.movie_name
+    booking_data['theatre']=book.theatre_name
     final_booking_data.append(booking_data)
   template=env.get_template('user_report.html')
   return template.render(final_booking_data=final_booking_data,total_cost=total_cost,name=name,month=month)
@@ -153,19 +158,24 @@ def gen_html(user):
 @celery.task()
 def gencsv(id):
   theatre=Theatre.query.filter_by(tid=id).first()
-  shows=theatre.shows
-  movi=set()
-  for show in shows:
-    movi.add(show.movie.mid)
-  movi=list(movi)
-  movies=[Movie.query.filter_by(mid=x).first() for x in movi]
-  data_rows = [['This', "Report", "is", "For" ,theatre.tname, theatre.city, 'Capacity','Of', theatre.capacity],[]]
-  data_rows.append(['List','Of','Movies', 'Hosted', ':']+[movie.mname for movie in movies])
-  data_rows.append([])
+  # shows=theatre.shows
+  # movi=set()
+  # for show in shows:
+  #   movi.add(show.movie.mid)
+  # movi=list(movi)
+  # movies=[Movie.query.filter_by(mid=x).first() for x in movi]
+  # data_rows = [['This', "Report", "is", "For" ,theatre.tname, theatre.city, 'Capacity','Of', theatre.capacity],[]]
+  # data_rows.append(['List','Of','Movies', 'Hosted', ':']+[movie.mname for movie in movies])
+  # data_rows.append([])
+  # data_rows.append(['MOVIE NAME', 'SHOWTIME', 'SEATS BOOKED', 'REVENUE GENERATED'])
+  # for movie in movies:
+  #   for show in movie.shows:
+  #     data_rows.append([movie.mname, show.stime, sum(book.seats for book in show.bookings), sum(book.seats for book in show.bookings)*show.ticket_price])
+  bookings=Booking.query.filter_by(tid=id).all()
+  data_rows = [['This', "Report", "is", "For" ,theatre.tname, theatre.city, 'Capacity','Of', theatre.capacity],[],[]]
   data_rows.append(['MOVIE NAME', 'SHOWTIME', 'SEATS BOOKED', 'REVENUE GENERATED'])
-  for movie in movies:
-    for show in movie.shows:
-      data_rows.append([movie.mname, show.stime, sum(book.seats for book in show.bookings), sum(book.seats for book in show.bookings)*show.ticket_price])
+  for book in bookings:
+    data_rows.append([book.movie_name, book.show_time, book.seats, book.ticket_price*book.seats])
   with open(f'admin_report_{theatre.tid}.csv', mode='w', newline='') as file:
     writer=csv.writer(file)
     writer.writerows(data_rows)
@@ -490,7 +500,7 @@ class Book(Resource):
     params=request.get_json()['dd']
     show=Show.query.filter_by(sid=params['show_id']).first()
     show.available_seats=show.available_seats-int(params['seats'])
-    book=Booking(uid=uid,shid=params['show_id'],seats=int(params['seats']), booking_date=datetime.datetime.now())
+    book=Booking(uid=uid,shid=params['show_id'],seats=int(params['seats']), booking_date=datetime.datetime.now(),movie_name=show.movie.mname,tid=show.theatre.tid,theatre_name=show.theatre.tname,show_time=show.stime,ticket_price=show.ticket_price)
     db.session.add(book)
     db.session.commit()
     return 'Booking Success!'

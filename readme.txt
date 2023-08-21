@@ -1,6 +1,6 @@
 How to Run The ShowDekho App
 
-1.) Pip install All the dependencies(Flask, flask_sqlalchemy, flask_cors, flask_jwt_extended, flask_restful, celery, pdfkit, Mailhog, Redis
+1.) Pip install All the dependencies(Flask, flask_sqlalchemy, flask_cors, flask_jwt_extended, flask_restful, celery, pdfkit, Mailhog, Redis, node, npm install
 2.) After all the Dependencies are installed, we have to start all the servers in wsl/ubuntu Machine
 3.) Goto Root directory of the Project, python app.py
 4.) Goto Frontend Directory, npm run dev
